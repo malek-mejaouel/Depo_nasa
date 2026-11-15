@@ -3,13 +3,13 @@ import { dist } from "../lib/mission.js";
 import { elevAt } from "../lib/geo.js";
 
 // Interactive bottom-docked elevation profile chart with slope cross-section,
-// cumulative gain/loss, metabolic O2 cost multiplier, and map synchronization.
+// cumulative gain/loss, effort index (team assumption), and map synchronization.
 export default function ElevationProfile({ routePts = [], geo = null, stops = [], onHoverCoord = null, hoveredCoord = null }) {
   const [hoverDist, setHoverDist] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const svgRef = useRef(null);
 
-  // Compute profile points: distance, elevation, slope, terrain class, metabolic multiplier
+  // Compute profile points: distance, elevation, slope, terrain class, effort index
   const data = useMemo(() => {
     if (!routePts || routePts.length < 2 || !geo?.elev) return null;
 
@@ -47,22 +47,20 @@ export default function ElevationProfile({ routePts = [], geo = null, stops = []
       const mapClass = geo.mapAt ? geo.mapAt(p.lat, p.lon) : (slope >= 25 ? 3 : slope >= 15 ? 2 : 1);
       const isSandNear = stops.some((s) => s.sand_pct >= 0.1 && dist(s, p) < 20);
 
-      // Metabolic multiplier: baseline 1.0 + uphill effort + loose sand
+      // Effort index (TEAM ASSUMPTION, not a measured metabolic rate): 1.0 on flat firm ground,
+      // +0.25 per 15° of slope, +0.35 within 20 m of a stop where our AI saw ≥ 10% sand. Shown only; oxygen planning does not use it.
       const uphillEffort = slope > 0 ? (slope / 15) * 0.25 : 0;
       const sandPenalty = isSandNear ? 0.35 : 0;
       const multiplier = 1.0 + uphillEffort + sandPenalty;
       multSum += multiplier;
 
-      // Color classification: GO (< 15°), Caution (15-25°), NO-GO (≥ 25°)
-      let color = "#1a9850"; // GO green
-      let safetyLabel = "GO (firm)";
-      if (slope >= 25 || mapClass === 3) {
-        color = "#d73027"; // NO-GO red
-        safetyLabel = "NO-GO (steep ≥ 25°)";
-      } else if (slope >= 15 || mapClass === 2 || isSandNear) {
-        color = "#f4c430"; // Caution amber
-        safetyLabel = isSandNear ? "Caution (sand)" : "Caution (slope 15–25°)";
-      }
+      // Colour = the team GO/NO-GO map (the same cells the route planner uses; slope there is on the 1 m DEM).
+      // The slope number above is only between profile samples (~15 m heights), so it is not used to colour.
+      const cls = geo.mapAt ? mapClass : (slope >= 25 ? 3 : slope >= 15 ? 2 : 1);
+      let color = "#1a9850", safetyLabel = "GO (team map)";
+      if (cls === 3) { color = "#d73027"; safetyLabel = "NO-GO (team map)"; }
+      else if (cls === 2 || isSandNear) { color = "#f4c430"; safetyLabel = isSandNear ? "Caution (sand our AI saw)" : "Caution (team map)"; }
+      else if (cls === 0) { color = "#9e9e9e"; safetyLabel = "Unknown (team map)"; }
 
       pts.push({
         lat: p.lat,
@@ -101,7 +99,7 @@ export default function ElevationProfile({ routePts = [], geo = null, stops = []
   const { pts, totalDist, gain, loss, minElev, maxElev, avgMultiplier } = data;
   const W = 800;
   const H = 100;
-  const padX = 40;
+  const padX = 56; // room for negative heights (Mars datum: this box is ~3.5 km below it)
   const padY = 16;
   const plotW = W - padX - 16;
   const plotH = H - padY * 2;
@@ -180,7 +178,7 @@ export default function ElevationProfile({ routePts = [], geo = null, stops = []
           <span className="elev-icon">📈</span>
           <b>Elevation &amp; Slope Profile</b>
           <span className="elev-summary">
-            Traverse: <b>{Math.round(totalDist)} m</b> · Gain: <b className="gain">+{Math.round(gain)} m</b> · Loss: <b className="loss">-{Math.round(loss)} m</b> · Metabolic Multiplier: <b>{avgMultiplier.toFixed(2)}×</b>
+            Traverse: <b>{Math.round(totalDist)} m</b> · Gain: <b className="gain">+{Math.round(gain)} m</b> · Loss: <b className="loss">-{Math.round(loss)} m</b> · Effort index (assumption): <b>{avgMultiplier.toFixed(2)}×</b>
           </span>
         </div>
         <button className="elev-toggle" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expand Elevation Profile" : "Collapse Profile"}>
@@ -204,10 +202,10 @@ export default function ElevationProfile({ routePts = [], geo = null, stops = []
 
               {/* Elevation grid & labels */}
               <line x1={padX} y1={scaleY(minElev)} x2={W - 16} y2={scaleY(minElev)} stroke="#444" strokeDasharray="3 3" strokeWidth="0.8" />
-              <text x={padX - 6} y={scaleY(minElev) + 3} textAnchor="end" fill="#888" fontSize="10">{Math.round(minElev)}m</text>
+              <text x={padX - 6} y={scaleY(minElev) + 3} textAnchor="end" fill="#888" fontSize="10">{Math.round(minElev)} m</text>
 
               <line x1={padX} y1={scaleY(maxElev)} x2={W - 16} y2={scaleY(maxElev)} stroke="#444" strokeDasharray="3 3" strokeWidth="0.8" />
-              <text x={padX - 6} y={scaleY(maxElev) + 4} textAnchor="end" fill="#888" fontSize="10">{Math.round(maxElev)}m</text>
+              <text x={padX - 6} y={scaleY(maxElev) + 4} textAnchor="end" fill="#888" fontSize="10">{Math.round(maxElev)} m</text>
 
               {/* Baseline */}
               <line x1={padX} y1={H - padY} x2={W - 16} y2={H - padY} stroke="#555" strokeWidth="1" />
@@ -231,17 +229,17 @@ export default function ElevationProfile({ routePts = [], geo = null, stops = []
           <div className="elev-telemetry">
             {activePt ? (
               <span className="hud-pill">
-                Dist: <b>{Math.round(activePt.dist)} m</b> · Elev: <b>{Math.round(activePt.elev)} m</b> · Slope: <b>{activePt.slope.toFixed(1)}°</b> · Status: <span style={{ color: activePt.color }}>● {activePt.safetyLabel}</span> · O₂ Load: <b>{activePt.multiplier.toFixed(2)}×</b>
+                Dist: <b>{Math.round(activePt.dist)} m</b> · Elev: <b>{Math.round(activePt.elev)} m</b> · Slope: <b>{activePt.slope.toFixed(1)}°</b> (between samples) · Status: <span style={{ color: activePt.color }}>● {activePt.safetyLabel}</span> · Effort: <b>{activePt.multiplier.toFixed(2)}×</b>
               </span>
             ) : (
               <span className="hud-hint">
-                Hover cursor along profile to inspect elevation, slope gradient, and localized metabolic O₂ loading
+                Hover cursor along profile to inspect elevation, slope gradient, and the effort index (team assumption)
               </span>
             )}
             <div className="elev-legend">
-              <span><i style={{ background: "#1a9850" }} /> GO (&lt;15°)</span>
-              <span><i style={{ background: "#f4c430" }} /> Caution (15–25°/sand)</span>
-              <span><i style={{ background: "#d73027" }} /> NO-GO (≥25°)</span>
+              <span><i style={{ background: "#1a9850" }} /> GO</span>
+              <span><i style={{ background: "#f4c430" }} /> CAUTION (team map or sand)</span>
+              <span><i style={{ background: "#d73027" }} /> NO-GO (team map)</span>
             </div>
           </div>
         </div>

@@ -255,7 +255,7 @@ export default function Planner({
           }
         }} style={{ borderColor: k === chosen ? o.colour : undefined }}>
           <span className="optt"><i style={{ background: o.colour }} /><b>{o.label}</b>{o.tags.map((t) => <em key={t}>{t}</em>)}</span>
-          <span><b>{Math.round(o.len)} m</b> · {Math.round(o.minutes)} min walk · <b className="mc1">{o.goPct}% GO</b>{o.science?.length ? ` · near ${o.science.length} science stop${o.science.length > 1 ? "s" : ""}` : ""}</span>
+          <span><b>{Math.round(o.len)} m</b> · {Math.round(o.minutes)} min walk · <b className="mc1">{o.goPct}% GO</b>{o.science?.length ? ` · within 30 m of ${o.science.length} Curiosity stop${o.science.length > 1 ? "s" : ""}` : ""}</span>
           {o.target && <small className="sci">🔬 {o.target.type === "ridge" ? "Mineral ridge from old groundwater" : "Sandy hollow between ridges"}</small>}
           {o.warn?.length ? o.warn.map((w) => <small key={w} className="wtxt">⚠ {w}</small>) : <small className="ok">✓ firm, known ground</small>}
         </button>
@@ -287,7 +287,7 @@ export default function Planner({
       {abortData?.abortPaths?.length > 0 && (
         <div className="abort-hud">
           <div className="abort-title">
-            <span>🚨 Emergency Abort Corridors (Direct to W0 Lander)</span>
+            <span>🚨 Emergency Abort Corridors (Direct to W0, the start)</span>
           </div>
           {abortData.pnrIndex != null ? (
             <div className="pnr-warning">
