@@ -8,6 +8,7 @@ import { keyOf, labelOf, pointFrom } from "../lib/grey.js";
 import { scienceTargets, HUMAN, LABEL, siteNear, openOf, samplesOf } from "../lib/science.js";
 import { buildPath, navigate, turnWords, lookAhead, OFF_M, STEP_LEN } from "../lib/copilot.js";
 import { safePath } from "../lib/routes.js";
+import { elevAt } from "../lib/geo.js";
 
 // Team assumptions (ASSUMPTIONS.md)
 const STEP_M = 0.7, SCALE = 20, ARRIVE_M = 15; // phone walk: 0.7 m step ×20 on Mars (demo scale, assumption)
@@ -17,6 +18,8 @@ export default function Helmet() {
   const q = new URLSearchParams(location.search);
   const evaMin = +(q.get("eva") || 240);
   const why = q.get("why") || "";
+  // terrain elevation & slope profile HUD
+  const [showProfile, setShowProfile] = useState(false);
   // copilot: the safe walking path to the next stop, and where I am on it
   const [path, setPath] = useState(null);
   const pIdx = useRef(1);
@@ -30,6 +33,7 @@ export default function Helmet() {
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
   const [phoneWalk, setPhoneWalk] = useState(false); // move with the phone: real steps + real compass
+  useEffect(() => { if (running || phoneWalk) setShowProfile(true); }, [running, phoneWalk]);
   const [steps, setSteps] = useState(0);
   const [motionOk, setMotionOk] = useState(false);
   const [motionLevel, setMotionLevel] = useState(0);
@@ -160,9 +164,17 @@ export default function Helmet() {
       // fall: near free-fall (< 3 m/s²) then a hard hit (> 25 m/s²) within 1 s (team assumption)
       if (inc && inc.x != null) { const v = Math.hypot(inc.x, inc.y, inc.z), now = performance.now(); if (v < 3) fallT = now; else if (fallT && now - fallT < 1000 && v > 25) { fallT = 0; raise("Fall detected"); } }
       setMotionOk(true);
-      lp = 0.5 * lp + 0.5 * m; const t = performance.now();
-      if (!up && lp > 1.3 && t - lastStep > 330) { up = true; lastStep = t; step(); }
-      if (lp < 0.6) up = false;
+      lp = 0.5 * lp + 0.5 * m;
+      const t = performance.now();
+      // Auto-reset latch if motion dropped or enough time elapsed (prevents latch deadlocks)
+      if (up && (lp < 0.75 || t - lastStep > 500)) up = false;
+      // Step detected on natural walking bounce or deliberate phone movement
+      if (!up && (lp > 0.85 || m > 1.5) && t - lastStep > 280) {
+        up = true;
+        lastStep = t;
+        step();
+        try { if (navigator.vibrate) navigator.vibrate(25); } catch {}
+      }
     };
     const step = () => stepRef.current();
     const _unused = () => {
@@ -429,6 +441,16 @@ export default function Helmet() {
               : "No motion data from this phone/browser: tap 👣 Step (or open the link in Safari / Chrome)."}
           </div>
         )}
+        {showProfile && (
+          <HelmetTerrainProfile
+            path={path}
+            pIdxVal={Math.min(pIdx.current, (path?.pts?.length ?? 1) - 1)}
+            pos={pos}
+            geo={geo}
+            dist={dist}
+            visible={showProfile}
+          />
+        )}
         <div className="card2" style={{ borderColor: COLOURS[c] }}>
           <small>{gi === route.length - 1 ? "DESTINATION" : `NEXT · STOP ${goalN}/${realN}`}{siteNear(goal, targets, dist) ? " · 🔬 SCIENCE TARGET" : ""}</small>
           <b>{goal.home ? "START (HOME)" : goal.via ? "PATH" : labelOf(goal, route).toUpperCase()}</b>
@@ -448,6 +470,7 @@ export default function Helmet() {
         <button onClick={toggleCam}>{cam ? "🪐 Mars photo (simulated)" : "📷 AR camera"}</button>
         <button onClick={openPortal}>🌄 3D Mars portal</button>
         <button onClick={() => setVoice((v) => !v)}>{voice ? "🔊 Voice on" : "🔇 Voice off"}</button>
+        <button className={showProfile ? "on" : ""} onClick={() => setShowProfile((v) => !v)}>📈 Profile</button>
         <button className={ask ? "on" : ""} onClick={() => setAsk((a) => !a)}>🤖 Ask</button>
         <button title="Demo: test the guardian (simulated fall)" onClick={() => raise("Fall detected (test)")}>🧪 Fall</button>
         <button title="Demo: jump to turn-back time" onClick={() => setElapsed(evaMin * 60)}>🧪 Low O₂</button>
@@ -557,5 +580,186 @@ function Radar({ route, i, pos, live, geo, heading, drone }) {
       <circle r={R - 4} fill="none" stroke="currentColor" strokeWidth="6" />
       <text y={R - 24} textAnchor="middle" fontSize="40" fill="currentColor">400 m</text>
     </svg>
+  );
+}
+
+// Forward elevation & slope profile HUD: samples the next 150 m of the safe path ahead
+function HelmetTerrainProfile({ path, pIdxVal, pos, geo, dist, visible }) {
+  if (!visible || !path?.pts || !geo?.elev || !pos) return null;
+
+  const P = path.pts;
+  const maxAhead = 150;
+  const stepM = 3;
+  const pts = [];
+
+  let startZ = elevAt(geo.elev, pos.lat, pos.lon);
+  if (startZ == null) startZ = -4400;
+
+  pts.push({
+    d: 0,
+    lat: pos.lat,
+    lon: pos.lon,
+    z: startZ,
+    slope: 0,
+    classK: geo.mapAt ? geo.mapAt(pos.lat, pos.lon) : 1,
+  });
+
+  let acc = 0;
+  let prev = pos;
+  let prevZ = startZ;
+
+  for (let k = pIdxVal; k < P.length && acc < maxAhead; k++) {
+    const d = dist(prev, P[k]);
+    if (d <= 0.1) {
+      prev = P[k];
+      continue;
+    }
+    const n = Math.max(1, Math.ceil(d / stepM));
+    for (let s = 1; s <= n; s++) {
+      const t = s / n;
+      const curD = acc + d * t;
+      if (curD > maxAhead) break;
+      const lat = prev.lat + (P[k].lat - prev.lat) * t;
+      const lon = prev.lon + (P[k].lon - prev.lon) * t;
+      let z = elevAt(geo.elev, lat, lon);
+      if (z == null) z = prevZ;
+
+      const deltaD = curD - pts[pts.length - 1].d;
+      const deltaZ = z - pts[pts.length - 1].z;
+      const slope = deltaD > 0 ? (Math.atan(Math.abs(deltaZ) / deltaD) * 180) / Math.PI : 0;
+      const classK = geo.mapAt ? geo.mapAt(lat, lon) : (slope >= 25 ? 3 : slope >= 15 ? 2 : 1);
+
+      pts.push({
+        d: curD,
+        lat,
+        lon,
+        z,
+        slope,
+        classK,
+      });
+      prevZ = z;
+    }
+    acc += d;
+    prev = P[k];
+  }
+
+  if (pts.length < 2) return null;
+
+  const totalD = pts[pts.length - 1].d;
+  const minZ = Math.min(...pts.map((p) => p.z));
+  const maxZ = Math.max(...pts.map((p) => p.z));
+  const zRange = Math.max(4, maxZ - minZ);
+
+  const W = 500, H = 65;
+  const padL = 36, padR = 12, padT = 8, padB = 18;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const baseY = padT + plotH;
+
+  const getX = (d) => padL + (Math.min(d, maxAhead) / maxAhead) * plotW;
+  const getY = (z) => padT + plotH - ((z - minZ) / zRange) * plotH;
+
+  // Polyline & fill segments with GO / Caution / NO-GO classification
+  const segments = [];
+  for (let idx = 1; idx < pts.length; idx++) {
+    const p1 = pts[idx - 1];
+    const p2 = pts[idx];
+    let color = "#1a9850"; // GO green (< 15°)
+    if (p2.classK === 3 || p2.slope >= 25) {
+      color = "#d73027"; // NO-GO red (≥ 25°)
+    } else if (p2.classK === 2 || p2.slope >= 15) {
+      color = "#f4c430"; // Caution amber (15–25°)
+    }
+    const x1 = getX(p1.d), y1 = getY(p1.z);
+    const x2 = getX(p2.d), y2 = getY(p2.z);
+    segments.push({ x1, y1, x2, y2, color });
+  }
+
+  // Summary row below SVG
+  const noGo = pts.find((p) => p.classK === 3 || p.slope >= 25);
+  const caution = pts.find((p) => p.classK === 2 || p.slope >= 15);
+  let summary = "";
+  if (noGo) {
+    summary = `⛔ NO-GO ground in ${Math.round(noGo.d)}m (${Math.round(noGo.slope)}°) — DO NOT ADVANCE`;
+  } else if (caution) {
+    if (caution.d < 10) {
+      summary = `⚠ CAUTION ground (${Math.round(caution.slope)}°) ahead → NEXT STOP ${Math.round(totalD)}m`;
+    } else {
+      summary = `FIRM ${Math.round(caution.d)}m → ⚠ CAUTION in ${Math.round(caution.d)}m (${Math.round(caution.slope)}°) → NEXT STOP ${Math.round(totalD)}m`;
+    }
+  } else {
+    const maxSlope = Math.round(Math.max(...pts.map((p) => p.slope)));
+    summary = `✓ FIRM PATH AHEAD (slope ≤ ${maxSlope}°) → NEXT STOP in ${Math.round(totalD)}m`;
+  }
+
+  const cursorX = getX(0);
+  const cursorY = getY(pts[0].z);
+
+  return (
+    <div className="helmet-profile" aria-label="Forward terrain elevation and slope profile">
+      <svg className="helmet-profile-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        {/* X Grid lines and labels (0m, 50m, 100m, 150m) */}
+        {[0, 50, 100, 150].map((d) => {
+          const x = getX(d);
+          return (
+            <g key={d}>
+              <line x1={x} y1={padT} x2={x} y2={baseY} stroke="#ffffff1a" strokeDasharray="2 2" strokeWidth="1" />
+              <line x1={x} y1={baseY} x2={x} y2={baseY + 3} stroke="#ffffff44" strokeWidth="1" />
+              <text x={x} y={baseY + 12} textAnchor="middle" fontSize="9" fill="#94a3b8" fontFamily="monospace">
+                {d}m
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Y labels: min and max elevation */}
+        <text x={padL - 4} y={padT + 7} textAnchor="end" fontSize="8" fill="#94a3b8" fontFamily="monospace">
+          {Math.round(maxZ)}m
+        </text>
+        <text x={padL - 4} y={baseY - 1} textAnchor="end" fontSize="8" fill="#94a3b8" fontFamily="monospace">
+          {Math.round(minZ)}m
+        </text>
+
+        {/* Area fill polygons under segments */}
+        {segments.map((seg, idx) => (
+          <polygon
+            key={`poly-${idx}`}
+            points={`${seg.x1},${baseY} ${seg.x1},${seg.y1} ${seg.x2},${seg.y2} ${seg.x2},${baseY}`}
+            fill={seg.color}
+            opacity="0.25"
+          />
+        ))}
+
+        {/* Colored polyline segments */}
+        {segments.map((seg, idx) => (
+          <line
+            key={`line-${idx}`}
+            x1={seg.x1}
+            y1={seg.y1}
+            x2={seg.x2}
+            y2={seg.y2}
+            stroke={seg.color}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        ))}
+
+        {/* End of path / next stop marker if within 150m */}
+        {totalD < maxAhead && (
+          <g>
+            <line x1={getX(totalD)} y1={padT} x2={getX(totalD)} y2={baseY} stroke="#7fb3ff" strokeDasharray="3 2" strokeWidth="1.5" />
+            <circle cx={getX(totalD)} cy={getY(pts[pts.length - 1].z)} r="3" fill="#7fb3ff" />
+          </g>
+        )}
+
+        {/* Astronaut current position cursor at x=0 with pulsating ring */}
+        <circle cx={cursorX} cy={cursorY} r="7" fill="none" stroke="#ffffff" strokeWidth="1" opacity="0.7">
+          <animate attributeName="r" values="3.5;7.5;3.5" dur="1.8s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.8s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={cursorX} cy={cursorY} r="3.5" fill="#ffffff" stroke="#000000" strokeWidth="1.5" />
+      </svg>
+      <div className="helmet-profile-info">{summary}</div>
+    </div>
   );
 }

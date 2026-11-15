@@ -6,11 +6,18 @@ import { copyMap3d } from "./scripts/map3d.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const esbuildPath = path.join(__dirname, "node_modules", "esbuild", "bin", "esbuild");
-const outJs = path.join(__dirname, "..", "firmground-app-built", "assets", "index-BroThxlx.js");
-const outCss = path.join(__dirname, "..", "firmground-app-built", "assets", "index-BPlUwsGe.css");
-const generatedCss = path.join(__dirname, "..", "firmground-app-built", "assets", "index-BroThxlx.css");
+const htmlPath = path.join(__dirname, "..", "firmground-app-built", "index.html");
+const html = fs.readFileSync(htmlPath, "utf8");
+const jsMatch = html.match(/src=["']\.\/assets\/(index-[^"']+\.js)["']/);
+const cssMatch = html.match(/href=["']\.\/assets\/(index-[^"']+\.css)["']/);
+const jsName = jsMatch ? jsMatch[1] : "index-CtcCxMKD.js";
+const cssName = cssMatch ? cssMatch[1] : "index-ChfYFD5d.css";
 
-console.log("Building Firm Ground frontend with esbuild...");
+const outJs = path.join(__dirname, "..", "firmground-app-built", "assets", jsName);
+const outCss = path.join(__dirname, "..", "firmground-app-built", "assets", cssName);
+const generatedCss = path.join(__dirname, "..", "firmground-app-built", "assets", jsName.replace(/\.js$/, ".css"));
+
+console.log(`Building Firm Ground frontend with esbuild -> ${jsName}, ${cssName}...`);
 execFileSync(process.execPath, [
   esbuildPath,
   path.join(__dirname, "src", "main.jsx"),
@@ -24,7 +31,7 @@ execFileSync(process.execPath, [
 
 if (fs.existsSync(generatedCss)) {
   fs.copyFileSync(generatedCss, outCss);
-  console.log("Synced CSS bundle to index-BPlUwsGe.css");
+  console.log(`Synced CSS bundle to ${cssName}`);
 }
 // the 3D layer map shown in the tablet (copied from Map_layer/martian_map/web, see scripts/map3d.mjs)
 copyMap3d(path.join(__dirname, "..", "firmground-app-built", "map3d"));

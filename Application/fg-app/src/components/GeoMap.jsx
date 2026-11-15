@@ -110,7 +110,7 @@ export default function GeoMap({ targets = [], astro, trail = [], stops, greys, 
           iconSize: [28, 28],
         });
         const mkr = L.marker([wp.lat, wp.lon], { icon, draggable: true, zIndexOffset: 850 }).addTo(grp);
-        mkr.bindTooltip(`${isBase ? "W0 (Base / Lander)" : `Waypoint W${idx}`} · drag to adjust`);
+        mkr.bindTooltip(`${isBase ? "W0 (start)" : `Waypoint W${idx}`} · drag to adjust`);
         mkr.on("dragend", (e) => {
           const ll = e.target.getLatLng();
           onMoveWaypoint?.(idx, ll.lat, ll.lng);
