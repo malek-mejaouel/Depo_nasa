@@ -3,6 +3,7 @@ import MiniMap from "./MiniMap.jsx";
 import Map3D from "./Map3D.jsx";
 import GeoMap from "./GeoMap.jsx";
 import Terrain3D from "./Terrain3D.jsx";
+import LayerMap3D from "./LayerMap3D.jsx";
 import { SLOPE_TXT, MAP_TXT } from "../lib/geo.js";
 import ScoutResult from "./ScoutResult.jsx";
 import PairQR from "./PairQR.jsx";
@@ -33,7 +34,8 @@ export default function Tablet() {
   const [laser, setLaser] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scouted, setScouted] = useState({}); // sol → live reading
-  const [view3d, setView3d] = useState(false);
+  const [view3d, setView3d] = useState(true); // 3D by default; off = the 2D map
+  const [simple3d, setSimple3d] = useState(false); // the 3D layer map could not start: use the drawn 3D view
   const [change, setChange] = useState(false);
   const [noGeo, setNoGeo] = useState(false);
   const [picks, setPicks] = useState([]); // points the user clicked on the map
@@ -44,6 +46,7 @@ export default function Tablet() {
   // route planner A → B (several options)
   const [A, setA] = useState(null), [B, setB] = useState(null), [pickFor, setPickFor] = useState(null);
   const [waypoints, setWaypoints] = useState([]);
+  const [planMode, setPlanMode] = useState("direct"); // route planner: "direct" (A → B) or "multi" (W0..Wk)
   const [abortData, setAbortData] = useState(null);
   const [hoverCoord, setHoverCoord] = useState(null);
   const [loadedGeo, setLoadedGeo] = useState(null);
@@ -106,6 +109,11 @@ export default function Tablet() {
     });
     setOptions([]);
   };
+
+  const pins3d = useMemo(() => (planMode === "multi"
+    ? waypoints.map((w, i) => w && { label: `W${i}`, kind: i === 0 ? "a" : "w", lat: w.lat, lon: w.lon })
+    : [A && { label: "A", kind: "a", lat: A.lat, lon: A.lon }, B && { label: "B", kind: "b", lat: B.lat, lon: B.lon }]
+  ).filter(Boolean), [planMode, waypoints, A, B]);
 
   const elevStats = useMemo(() => {
     const pts = options[chosen]?.pts;
@@ -280,7 +288,7 @@ export default function Tablet() {
         setLaser(false); setBusy(false);
         setScouted((m) => ({ ...m, [keyOf(target)]: { sol: src.sol, grey: noData, h, verdict: v, sand_pct: reading.sand_pct, bigrock_pct: reading.bigrock_pct ?? 0, env: envAt(0, src.sol), changed } }));
         say(`Scout report. ${v.label.replace(":", ".")}.`);
-        publish({ type: "scout", key: keyOf(target), sol: noData ? null : target.sol, near: src.sol, grey: noData, label: labelOf(target), lat: target.lat, lon: target.lon,
+        publish({ type: "scout", key: keyOf(target), sol: noData ? null : target.sol, near: src.sol, grey: noData, label: labelOf(target, routeStops), lat: target.lat, lon: target.lon,
           sand_pct: reading.sand_pct, bigrock_pct: reading.bigrock_pct ?? 0, verdict: v, changed });
       }, 1200);
     };
@@ -290,6 +298,7 @@ export default function Tablet() {
   if (err) return <p className="err">⚠ {err}. Put stops.json in public/data/.</p>;
 
   const routeStops = route.map(resolve).filter(Boolean);
+  const show3d = view3d; // A / B / waypoints can be placed on the 3D map too
   const plan = missionCheck(routeStops, EVA_MIN);
   const live = sel && scouted[keyOf(sel)];
   const cert = sel && certaintyOf(sel, live);
@@ -309,25 +318,37 @@ export default function Tablet() {
         {astroLive
           ? <span className="tag live">● LIVE astronaut · {astro.running || astro.steps ? "walking to" : "next:"} {astro.next} · {Math.round(astro.d)} m{astro.steps ? ` · ${astro.steps} steps` : ""}</span>
           : <span className="tag muted">helmet not connected</span>}
-        <div className="switch" role="group" aria-label="Map view">
-          <button className={!view3d ? "on" : ""} onClick={() => setView3d(false)}>2D</button>
-          <button className={view3d ? "on" : ""} onClick={() => setView3d(true)}>3D</button>
-        </div>
       </header>
       <main>
         <section className="mapCol">
-          {view3d
-            ? (noGeo ? <Map3D stops={stops} route={routeStops} selected={sel} onSelect={setSel} colourFor={colourFor} />
+          <div className="mapbar">
+            <div className="mapbar-title">
+              <b>{show3d ? "3D GO / NO-GO map" : "2D map"}</b>
+              <span>{pickFor ? `Click the ground to place ${pickFor}` : show3d ? (options[chosen]?.pts ? `Route: ${options[chosen].label} · ${Math.round(options[chosen].len)} m · layer by layer` : "The whole boxwork area · layer by layer") : "Drag to move · scroll to zoom · click to check a spot"}</span>
+            </div>
+            <label className="toggle" title="3D map on / off">
+              <input type="checkbox" role="switch" checked={view3d} onChange={(e) => setView3d(e.target.checked)} />
+              <i aria-hidden="true" />
+              <span>3D</span>
+            </label>
+          </div>
+          {show3d
+            ? (!simple3d ? <LayerMap3D routePts={options[chosen]?.pts} routeColour={options[chosen]?.colour} pins={pins3d} picking={pickFor} onPick={pick} onCancelPick={() => setPickFor(null)} onFallback={() => setSimple3d(true)} />
+              : noGeo ? <Map3D stops={stops} route={routeStops} selected={sel} onSelect={setSel} colourFor={colourFor} />
                      : <Terrain3D stops={stops} route={routeStops} picks={picks} pathPts={options[chosen]?.pts} pathUnsure={null} hoverCoord={hoverCoord} onPick={pick} selected={sel} onSelect={setSel} colourFor={colourFor} onFail={() => setNoGeo(true)} />)
             : (noGeo ? <MiniMap stops={stops} greys={greys} route={routeStops} selected={sel} onSelect={setSel} drone={drone} laser={laser} scouted={scouted} colourFor={colourFor} />
-                     : <GeoMap targets={targets} astro={astroLive ? astro : null} trail={trail} stops={stops} greys={[]} picks={picks} pathPts={options[chosen]?.pts} pathColour={options[chosen]?.colour} altPaths={options.filter((_, k) => k !== chosen)} onChooseAlt={(o) => setChosen(options.indexOf(o))} ab={{ A, B }} waypoints={waypoints} onMoveWaypoint={handleMoveWaypoint} abortPaths={abortData?.abortPaths || []} hoverCoord={hoverCoord} droneCells={droneCells} scoutSegs={options[chosen]?.scouted ? [] : need?.segs || []} onPick={pick} route={routeStops} selected={sel} onSelect={setSel} drone={drone} laser={laser} scouted={scouted} colourFor={colourFor} onFail={() => setNoGeo(true)} />)}
-          <ElevationProfile routePts={options[chosen]?.pts} geo={loadedGeo} stops={stops} onHoverCoord={setHoverCoord} hoveredCoord={hoverCoord} />
+                     : <GeoMap targets={targets} astro={astroLive ? astro : null} trail={trail} stops={stops} greys={[]} picks={picks} pathPts={options[chosen]?.pts} pathColour={options[chosen]?.colour} altPaths={options.filter((_, k) => k !== chosen)} onChooseAlt={(o) => setChosen(options.indexOf(o))} ab={{ A, B }} waypoints={planMode === "multi" ? waypoints : []} onMoveWaypoint={handleMoveWaypoint} abortPaths={abortData?.abortPaths || []} hoverCoord={hoverCoord} droneCells={droneCells} scoutSegs={options[chosen]?.scouted ? [] : need?.segs || []} onPick={pick} route={routeStops} selected={sel} onSelect={setSel} drone={drone} laser={laser} scouted={scouted} colourFor={colourFor} onFail={() => setNoGeo(true)} />)}
           <div className="legend">
-            {["green", "orange", "red", "grey"].map((c) => (
-              <span key={c}><i style={{ background: COLOURS[c] }} />{{ green: "GO · AI sure", orange: "careful · or AI unsure", red: "don't go", grey: "no ground data · send scout" }[c]}</span>
-            ))}
-            <span>🎤 = live scout reading</span>
+            {show3d && !simple3d
+              ? GONOGO_KEY.map(([c, t]) => <span key={t}><i className="sq" style={{ background: c }} />{t}</span>)
+              : <>
+                  {["green", "orange", "red", "grey"].map((c) => (
+                    <span key={c}><i style={{ background: COLOURS[c] }} />{{ green: "GO · AI sure", orange: "careful · or AI unsure", red: "don't go", grey: "no ground data · send scout" }[c]}</span>
+                  ))}
+                  <span>🎤 = live scout reading</span>
+                </>}
           </div>
+          <ElevationProfile routePts={options[chosen]?.pts} geo={loadedGeo} stops={stops} onHoverCoord={setHoverCoord} hoveredCoord={hoverCoord} />
         </section>
         <section className="side">
           <label className="gostop">Go to stop:
@@ -338,7 +359,7 @@ export default function Tablet() {
           </label>
           {!noGeo && <Planner targets={targets} stops={stops} A={A} B={B} setA={setA} setB={setB} waypoints={waypoints} setWaypoints={setWaypoints} pickFor={pickFor} setPickFor={setPickFor} sel={sel}
             options={options} setOptions={setOptions} chosen={chosen} setChosen={setChosen} onUse={useOption} need={need} onScout={scoutRoute} scoutBusy={scoutBusy}
-            abortData={abortData} setAbortData={setAbortData} plan={plan} elevStats={elevStats} />}
+            abortData={abortData} setAbortData={setAbortData} plan={plan} elevStats={elevStats} mode={planMode} setMode={setPlanMode} />}
           {sel && (
             <div className="card">
               {targetOf(sel) && (
@@ -352,7 +373,7 @@ export default function Tablet() {
                   {targetOf(sel).auto && <small>Chosen by our team from our AI result ({targetOf(sel).basis}).</small>}
                 </div>
               )}
-              <h2 style={{ color: COLOURS[fc] }}>{sel.custom ? "Your point" : sel.grey ? "Unexplored area" : `Sol ${sel.sol}`}</h2>
+              <h2 style={{ color: COLOURS[fc] }}>{sel.custom ? (l => l[0].toUpperCase() + l.slice(1))(labelOf(sel, routeStops)) : sel.grey ? "Unexplored area" : `Sol ${sel.sol}`}</h2>
               {(sel.grey || (sel.custom && sel.aiFrom == null && !sel.droneRead))
                 ? <>
                     <p className="muted">No Curiosity photo here: the nearest one is {sel.metres} m away (sol {sel.nearest.sol}). Slope and height come from the team DEM; only the scout can tell what the ground is.</p>
@@ -384,7 +405,7 @@ export default function Tablet() {
           )}
           <div className="card">
             <h3>Route ({route.length} points)</h3>
-            <p className="muted">{route.length ? routeStops.reduce((acc, p) => { if (p.via) { const l = acc[acc.length - 1]; if (typeof l === "number") acc[acc.length - 1] = l + 1; else acc.push(1); } else acc.push(labelOf(p)); return acc; }, []).map((x) => (typeof x === "number" ? `(${x} path points)` : x)).join(" → ") : "Click a stop, or anywhere on the map, then ➕ Add to route."}</p>
+            <p className="muted">{route.length ? routeStops.reduce((acc, p) => { if (p.via) { const l = acc[acc.length - 1]; if (typeof l === "number") acc[acc.length - 1] = l + 1; else acc.push(1); } else acc.push(labelOf(p, routeStops)); return acc; }, []).map((x) => (typeof x === "number" ? `(${x} path points)` : x)).join(" → ") : "Click a stop, or anywhere on the map, then ➕ Add to route."}</p>
             {plan && (
               <div className={"gonogo " + (plan.go ? "go" : "nogo")}>
                 <b>{plan.go ? "GO" : "NO GO"}</b>
@@ -402,3 +423,5 @@ export default function Tablet() {
 }
 
 const pct = (v) => `${Math.round((v ?? 0) * 100)}%`;
+// colours of the combined GO / NO-GO map (Map_layer/martian_map/web/layers.json legend, crew on foot)
+const GONOGO_KEY = [["#1a9850", "GO"], ["#f4c430", "CAUTION"], ["#d73027", "NO-GO"], ["#9e9e9e", "no data · send the scout"]];

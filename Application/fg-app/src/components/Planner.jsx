@@ -28,8 +28,9 @@ export default function Planner({
   setAbortData,
   plan,
   elevStats,
+  mode = "direct", // "direct" (A->B) | "multi" (W0..Wk); kept in Tablet so the maps show the right pins
+  setMode,
 }) {
-  const [mode, setMode] = useState("direct"); // "direct" (A->B) | "multi" (W0..Wk)
   const [via, setVia] = useState("auto");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -64,6 +65,8 @@ export default function Planner({
   async function findMulti() {
     setErr("");
     if (!waypoints || waypoints.length < 2) return setErr("Add at least 2 waypoints (W0 Base and destination).");
+    const unset = waypoints.findIndex((w) => !w);
+    if (unset >= 0) return setErr(`Place W${unset} first: 📍 On map, then click the map.`);
     const g = await loadGeo();
     for (let i = 0; i < waypoints.length; i++) {
       if (!inBox(g, waypoints[i].lat, waypoints[i].lon)) {
@@ -90,39 +93,23 @@ export default function Planner({
     if (setAbortData) setAbortData(ab);
   }
 
-  // Coordinate row for A/B or Waypoint
+  // Row for A/B or a waypoint: where it is in words (no coordinates), set it on the map or from the selected stop
   const row = (name, P, onUpdate, onRemove = null, onMoveUp = null, onMoveDown = null, isBase = false) => {
-    const commit = (field, txt) => {
-      const v = parseFloat(String(txt).replace(",", "."));
-      if (isNaN(v)) return;
-      onUpdate({ lat: field === "lat" ? v : P?.lat ?? -4.8, lon: field === "lon" ? v : P?.lon ?? 137.38, label: P?.label || "typed" });
-      setOptions([]);
-    };
-    const inp = (field, ph) => (
-      <input
-        key={`${name}-${field}-${P ? P[field] : "x"}`}
-        aria-label={`${name} ${field === "lat" ? "latitude" : "longitude"}`}
-        inputMode="decimal"
-        defaultValue={P ? P[field].toFixed(5) : ""}
-        placeholder={ph}
-        onBlur={(e) => commit(field, e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") commit(field, e.target.value); }}
-      />
-    );
+    const words = !P ? "not set" : /^sol \d+/.test(P.label || "") ? `Curiosity stop, ${P.label}` : "point on the map";
     return (
-      <div className="prow" key={name}>
+      <div className="prow ab" key={name}>
         <b className={"pin " + (isBase ? "A" : name.startsWith("W") ? "wp" : name)}>{name}</b>
-        {inp("lat", "lat −4.80")}
-        {inp("lon", "lon 137.38")}
+        <span className={"where" + (P ? "" : " unset")}>{words}</span>
         <button
-          className={pickFor === name ? "on" : ""}
+          className={"chipbtn" + (pickFor === name ? " on" : "")}
           onClick={() => setPickFor(pickFor === name ? null : name)}
-          title="Click on the map to set it"
+          title="Then click the ground on the 3D or 2D map"
         >
-          📍
+          📍 {pickFor === name ? "Click the map…" : "On map"}
         </button>
         {sel && (
           <button
+            className="chipbtn"
             onClick={() => {
               onUpdate({
                 lat: sel.lat,
@@ -131,9 +118,9 @@ export default function Planner({
               });
               setOptions([]);
             }}
-            title="Use the selected stop / point"
+            title="Use the stop or point selected now"
           >
-            = sel
+            Selected
           </button>
         )}
         {onMoveUp && <button onClick={onMoveUp} title="Move Up" className="smallbtn">↑</button>}
@@ -144,25 +131,15 @@ export default function Planner({
   };
 
   const addWaypoint = () => {
-    if (!waypoints.length) {
-      const base = A || { lat: -4.805, lon: 137.375, label: "W0 (Base)" };
-      const next = B || { lat: -4.810, lon: 137.380, label: "W1" };
-      setWaypoints([base, next]);
-      return;
-    }
-    const last = waypoints[waypoints.length - 1];
-    const newWp = {
-      lat: +(last.lat - 0.002).toFixed(5),
-      lon: +(last.lon + 0.002).toFixed(5),
-      label: `W${waypoints.length}`,
-    };
-    setWaypoints([...waypoints, newWp]);
+    const next = [...waypoints, null];
+    setWaypoints(next);
+    setPickFor(`W${next.length - 1}`);
     setOptions([]);
   };
 
   const removeWaypoint = (idx) => {
     if (waypoints.length <= 2) return;
-    const next = waypoints.filter((_, i) => i !== idx).map((wp, i) => ({ ...wp, label: i === 0 ? "W0 (Base)" : `W${i}` }));
+    const next = waypoints.filter((_, i) => i !== idx).map((wp, i) => (wp ? { ...wp, label: i === 0 ? "W0 (Base)" : `W${i}` } : null));
     setWaypoints(next);
     setOptions([]);
   };
@@ -172,7 +149,7 @@ export default function Planner({
     const arr = [...waypoints];
     const item = arr.splice(fromIdx, 1)[0];
     arr.splice(toIdx, 0, item);
-    const renamed = arr.map((wp, i) => ({ ...wp, label: i === 0 ? "W0 (Base)" : `W${i}` }));
+    const renamed = arr.map((wp, i) => (wp ? { ...wp, label: i === 0 ? "W0 (Base)" : `W${i}` } : null));
     setWaypoints(renamed);
     setOptions([]);
   };
@@ -184,6 +161,11 @@ export default function Planner({
     setOptions([]);
   };
 
+  // switching mode starts clean: the waypoints and routes of the other mode go away (A and B stay)
+  const clearRoutes = () => { setOptions([]); setAbortData?.(null); setPickFor(null); setErr(""); };
+  const toDirect = () => { if (mode === "direct") return; setMode("direct"); setWaypoints([]); clearRoutes(); };
+  const toMulti = () => { if (mode === "multi") return; setMode("multi"); setWaypoints([A || null, B || null]); clearRoutes(); };
+
   const activeOption = options[chosen];
 
   return (
@@ -191,11 +173,8 @@ export default function Planner({
       <div className="planner-header">
         <h3>🧭 Route Planner</h3>
         <div className="planner-modes">
-          <button className={mode === "direct" ? "on" : ""} onClick={() => setMode("direct")}>A → B</button>
-          <button className={mode === "multi" ? "on" : ""} onClick={() => {
-            setMode("multi");
-            if (!waypoints.length && A && B) setWaypoints([A, B]);
-          }}>Multi-Stop ({waypoints.length || 2})</button>
+          <button className={mode === "direct" ? "on" : ""} onClick={toDirect}>A → B</button>
+          <button className={mode === "multi" ? "on" : ""} onClick={toMulti}>Multi-stop</button>
         </div>
       </div>
 
@@ -203,7 +182,6 @@ export default function Planner({
         <>
           {row("A", A, setA, null, null, null, true)}
           {row("B", B, setB)}
-          {pickFor && <small className="ok">Click on the map to set {pickFor}.</small>}
           <div className="prow">
             <label className="muted">Science target
               <select value={via} onChange={(e) => setVia(e.target.value)}>
@@ -213,7 +191,7 @@ export default function Planner({
                 {stops.map((s) => <option key={s.sol + "-" + s.lon} value={"s" + s.sol}>sol {s.sol}</option>)}
               </select>
             </label>
-            <button onClick={() => { const a = A; setA(B); setB(a); setOptions([]); }}>⇅</button>
+            <button onClick={() => { const a = A; setA(B); setB(a); setOptions([]); }} title="Swap A and B" aria-label="Swap A and B">⇅</button>
             <button className="primary" onClick={findDirect} disabled={busy}>{busy ? "Finding…" : "Find routes"}</button>
           </div>
         </>
@@ -237,7 +215,6 @@ export default function Planner({
               {busy ? "Routing…" : "Calculate Multi-Stop Route"}
             </button>
           </div>
-          {pickFor && <small className="ok">Click on the map to set {pickFor}.</small>}
         </div>
       )}
 
@@ -352,7 +329,7 @@ export default function Planner({
         </div>
       )}
 
-      <small className="muted">{RULES} Weights are team assumptions.</small>
+      <details className="rules"><summary>How routes are chosen</summary><small className="muted">{RULES} Weights are team assumptions.</small></details>
     </div>
   );
 }
