@@ -30,7 +30,7 @@ export function exportGeoJSON(routeOpt, waypoints = [], abortData = null, target
       features.push({
         type: "Feature",
         properties: {
-          name: `Emergency Abort Corridor W${ap.fromIndex} -> Lander`,
+          name: `Emergency Abort Corridor W${ap.fromIndex} -> start`,
           type: "abort_corridor",
           from_waypoint: ap.fromIndex,
           distance_m: Math.round(ap.dist || 0),
@@ -50,7 +50,7 @@ export function exportGeoJSON(routeOpt, waypoints = [], abortData = null, target
     features.push({
       type: "Feature",
       properties: {
-        name: wp.label || (idx === 0 ? "W0 (Lander / Base)" : `W${idx}`),
+        name: wp.label || (idx === 0 ? "W0 (start)" : `W${idx}`),
         index: idx,
         type: idx === 0 ? "base" : "waypoint",
       },
@@ -109,7 +109,7 @@ export function exportGPX(routeOpt, waypoints = []) {
   waypoints.forEach((wp, idx) => {
     gpx += `  <wpt lat="${wp.lat.toFixed(7)}" lon="${wp.lon.toFixed(7)}">
     <name>${escapeXml(wp.label || (idx === 0 ? "W0-Base" : `W${idx}`))}</name>
-    <sym>${idx === 0 ? "Lander" : "Flag"}</sym>
+    <sym>Flag</sym>
   </wpt>\n`;
   });
 
@@ -199,7 +199,7 @@ export function printMissionBriefing({ routeOpt, waypoints = [], plan = null, el
       <div class="metric"><span>Elevation Gain:</span><b>+${Math.round(elevStats?.gain || 0)} m</b></div>
       <div class="metric"><span>Elevation Loss:</span><b>-${Math.round(elevStats?.loss || 0)} m</b></div>
       <div class="metric"><span>Elevation Range:</span><b>${Math.round(elevStats?.minElev || 0)} m to ${Math.round(elevStats?.maxElev || 0)} m</b></div>
-      <div class="metric"><span>Average Metabolic Multiplier:</span><b>${elevStats?.avgMultiplier ? elevStats.avgMultiplier.toFixed(2) + "x" : "1.00x"}</b></div>
+      <div class="metric"><span>Average effort index (team assumption):</span><b>${elevStats?.avgMultiplier ? elevStats.avgMultiplier.toFixed(2) + "x" : "1.00x"}</b></div>
       <div class="metric"><span>Ground Firmness:</span><b>${routeOpt.goPct}% GO · ${Math.round(routeOpt.caution || 0)} m caution</b></div>
     </div>
   </div>
@@ -229,7 +229,7 @@ export function printMissionBriefing({ routeOpt, waypoints = [], plan = null, el
         const abortLeg = abortData?.abortPaths?.find((a) => a.fromIndex === i);
         return `<tr>
           <td><b>W${i}</b></td>
-          <td>${escapeXml(wp.label || (i === 0 ? "Lander / Base (Start)" : `Waypoint ${i}`))}${wp.target ? ` · 🔬 ${escapeXml(wp.target.name)}` : ""}</td>
+          <td>${escapeXml(wp.label || (i === 0 ? "Start (W0)" : `Waypoint ${i}`))}${wp.target ? ` · 🔬 ${escapeXml(wp.target.name)}` : ""}</td>
           <td>${wp.lat.toFixed(6)}°S</td>
           <td>${wp.lon.toFixed(6)}°E</td>
           <td>${i === 0 ? "–" : `${legDist} m`}</td>
