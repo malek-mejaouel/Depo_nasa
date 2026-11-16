@@ -1,24 +1,102 @@
 {
- "source": "Youssef Rebhi, Map_layer/martian_map/layers/L5_poi/exports/poi_cards.json (NASA/JPL news and Curiosity blogs; positions = Curiosity waypoint on that sol). Nazca text checked by Malak's team on the NASA blog, 15 Nov 2026.",
+ "source": "Youssef Rebhi, Map_layer/martian_map/layers/L5_poi/exports/poi_cards.json (NASA/JPL news and Curiosity blogs; positions = Curiosity waypoint on that sol). Nazca text checked by Malak's team on the NASA blog, 15 Nov 2026. Sources re-read on 15 Nov 2026 by Malak's team: contact text from Siebach et al. 2025 (GSA, doi 10.1130/abs/2025AM-10634); Altadena, Monte Grande and Nevado Sajama texts and open questions from the linked NASA pages. 'Take for the lab' lists are the team's suggestions.",
  "sites": [
-  { "id": "L5-0005", "name": "Sulfate unit to boxwork contact", "kind": "contact", "sol": 4534, "lat": -4.79761763, "lon": 137.3864361, "pos_m": 25,
-    "what": "Where Curiosity left the layered sulfate unit and entered the boxwork (sol 4534), the start of the boxwork campaign.",
-    "open": ["Why are boxwork patterns found here and nowhere else on Mount Sharp?", "How did such a wide network of ridges form?"],
-    "samples": ["Chip from each side of the contact (sulfate layer and boxwork bedrock)", "Photo of the contact with a scale bar"],
-    "src": "https://science.nasa.gov/blog/curiosity-blog-sols-4804-4811-kicking-off-the-final-phase-of-boxwork-exploration" },
-  { "id": "L5-0006", "name": "Altadena · first boxwork drill", "kind": "ridge", "sol": 4564, "lat": -4.79984723, "lon": 137.3835414, "pos_m": 5,
-    "what": "First drill sample of the boxwork campaign, on a ridge edge (June 2025): the baseline for boxwork bedrock.",
-    "src": "https://www.nasa.gov/missions/mars-science-laboratory/curiosity-rover/nasas-curiosity-mars-rover-starts-unpacking-boxwork-formations/" },
-  { "id": "L5-0007", "name": "Monte Grande hollow · Valle de la Luna drill (44th hole)", "kind": "hollow", "sol": 4693, "lat": -4.80783916, "lon": 137.3810353, "pos_m": 5,
-    "what": "Boxwork hollow studied in Oct 2025. Curiosity drilled its 44th hole here, Valle de la Luna, to compare hollow and ridge.",
-    "src": "https://science.nasa.gov/blog/curiosity-blog-sols-4695-4701-searching-for-answers-at-monte-grande/" },
-  { "id": "L5-0009", "name": "Nevado Sajama · ridge-top drill", "kind": "ridge", "sol": 4718, "lat": -4.80800755, "lon": 137.3810041, "pos_m": 5,
-    "what": "Ridge-top drill finished on sol 4718 (Nov 2025), drilled again on sol 4803: the ridge sample for the ridge-vs-hollow comparison.",
-    "src": "https://science.nasa.gov/blog/curiosity-blog-sols-4716-4722-drilling-success-at-nevado-sajama/" },
-  { "id": "L5-0011", "name": "Nazca · 49th drill hole", "kind": "crystals", "sol": 5050, "lat": -4.82466475, "lon": 137.3876138, "pos_m": 25,
-    "what": "Block packed with disc- and needle-shaped forms the team reads as possible crystals; drilled on sol 5050 (Oct 2026). If they are crystals, they record the old environment.",
-    "open": ["Are the discs and needles really crystal forms?", "Is today's mineral the original one, or did it change later?"],
-    "samples": ["Block with many discs and needles, whole if small", "Close-up photo of the discs with a scale bar", "Chip of the plain rock around them, to compare"],
-    "src": "https://science.nasa.gov/blog/curiosity-blog-sols-5043-5049-preparing-to-drill-at-nazca/" }
+  {
+   "id": "L5-0005",
+   "name": "Sulfate unit to boxwork contact",
+   "kind": "contact",
+   "sol": 4534,
+   "lat": -4.79761763,
+   "lon": 137.3864361,
+   "pos_m": 25,
+   "what": "Curiosity crossed the contact from the Layered Sulfate unit into the boxwork-bearing rock on sol 4534 (7 May 2025), the start of the boxwork campaign. The boxwork rock is a friable, fine-grained mudstone with more Si and Al and less Mg and S than the sulfate unit.",
+   "open": [
+    "Why are boxwork patterns found here and nowhere else on Mount Sharp?",
+    "Is the boxwork rock a separate unit bounded by this contact (an unconformity)?",
+    "How did the boxwork-bearing rock come to differ in chemistry from the sulfate unit below?"
+   ],
+   "samples": [
+    "Chip from each side of the contact (sulfate layer and boxwork bedrock)",
+    "Photo of the contact with a scale bar"
+   ],
+   "src": "https://doi.org/10.1130/abs/2025AM-10634",
+   "srcName": "Siebach et al. 2025, GSA abstract",
+   "src2": "https://science.nasa.gov/blog/curiosity-blog-sols-4804-4811-kicking-off-the-final-phase-of-boxwork-exploration/",
+   "src2Name": "NASA blog: the 4 boxwork phases"
+  },
+  {
+   "id": "L5-0006",
+   "name": "Altadena · first boxwork drill",
+   "kind": "bedrock",
+   "sol": 4564,
+   "lat": -4.79984723,
+   "lon": 137.3835414,
+   "pos_m": 5,
+   "what": "First drill sample of the boxwork campaign (8 June 2025). NASA found that the bedrock between the ridges has a different composition from other layers of Mount Sharp, and that white calcium sulfate veins came back here after mostly disappearing higher up.",
+   "src": "https://www.nasa.gov/missions/mars-science-laboratory/curiosity-rover/nasas-curiosity-mars-rover-starts-unpacking-boxwork-formations/",
+   "open": [
+    "Why were the ridges hardened into these patterns, and why only here?",
+    "Why did the calcium sulfate veins return in this layer?",
+    "Do the cemented ridges keep organic molecules or other signs of an ancient habitable environment?"
+   ],
+   "srcName": "NASA/JPL news, 23 June 2025",
+   "samples": [
+    "Chip of the bedrock, with a white calcium sulfate vein if you see one",
+    "Photo of the veins with a scale bar"
+   ]
+  },
+  {
+   "id": "L5-0007",
+   "name": "Monte Grande hollow · Valle de la Luna drill (44th hole)",
+   "kind": "hollow",
+   "sol": 4693,
+   "lat": -4.80783916,
+   "lon": 137.3810353,
+   "pos_m": 5,
+   "what": "Boxwork hollow studied in Oct 2025. Curiosity drilled its 44th hole here, Valle de la Luna, to compare hollow and ridge.",
+   "src": "https://science.nasa.gov/blog/curiosity-blog-sols-4695-4701-searching-for-answers-at-monte-grande/",
+   "open": [
+    "Ridges and hollows differ only subtly in chemistry: what makes the ridges resist erosion?",
+    "How did such a wide network of ridges and hollows form?"
+   ],
+   "srcName": "NASA blog, sols 4695–4701"
+  },
+  {
+   "id": "L5-0009",
+   "name": "Nevado Sajama · ridge-top drill",
+   "kind": "ridge",
+   "sol": 4718,
+   "lat": -4.80800755,
+   "lon": 137.3810041,
+   "pos_m": 5,
+   "what": "Ridge-top drill completed on sol 4718 (Nov 2025), drilled again as Nevado Sajama 2 (image sol 4803). Fine bright and gray veins here record fluids that went through the ridge, to compare with the Valle de la Luna hollow sample.",
+   "src": "https://science.nasa.gov/blog/curiosity-blog-sols-4716-4722-drilling-success-at-nevado-sajama/",
+   "open": [
+    "Did the fluids that left these veins make the ridges resist erosion?",
+    "How does the ridge rock compare with the hollow rock below (Valle de la Luna)?"
+   ],
+   "srcName": "NASA blog, sols 4716–4722"
+  },
+  {
+   "id": "L5-0011",
+   "name": "Nazca · 49th drill hole",
+   "kind": "crystals",
+   "sol": 5050,
+   "lat": -4.82466475,
+   "lon": 137.3876138,
+   "pos_m": 25,
+   "what": "Block packed with disc- and needle-shaped forms the team reads as possible crystals; drilled on sol 5050 (Oct 2026). If they are crystals, they record the old environment.",
+   "open": [
+    "Are the discs and needles really crystal forms?",
+    "Is today's mineral the original one, or did it change later?"
+   ],
+   "samples": [
+    "Block with many discs and needles, whole if small",
+    "Close-up photo of the discs with a scale bar",
+    "Chip of the plain rock around them, to compare"
+   ],
+   "src": "https://science.nasa.gov/blog/curiosity-blog-sols-5043-5049-preparing-to-drill-at-nazca/",
+   "srcName": "NASA blog, sols 5043–5049"
+  }
  ]
 }
